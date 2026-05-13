@@ -1706,21 +1706,16 @@
 
       <div class="settings-card">
         <h3>AI Bartender</h3>
-        <div class="key-status" id="key-status">Not connected</div>
-        <p class="alert">
-          The AI bartender needs an Anthropic API key. It's stored only in your browser — not in the shared backend. Each user adds their own key.
+        <div class="key-status" id="key-status">Checking…</div>
+        <p style="margin-bottom: 0;">
+          The AI bartender is provided for everyone — no setup needed. Just open the Ask AI tab and start chatting.
         </p>
-        <input type="password" id="setting-key" class="search-bar" placeholder="sk-ant-..." style="margin: 10px 0;" />
-        <button class="save-recipe-btn" onclick="saveKey()" style="margin-top: 0;">Save key</button>
       </div>
 
       <div class="settings-card">
-        <h3>Backend</h3>
-        <p>Your recipes sync to a Google Sheet via Apps Script. Each device pulls and pushes from there.</p>
+        <h3>Sync</h3>
         <div class="key-status" id="backend-status">Not configured</div>
-        <p class="alert" style="margin-top: 10px;">
-          The backend URL is set in the code (BACKEND_URL constant). If it's blank, the app runs in offline-only mode using localStorage.
-        </p>
+        <p style="margin-bottom: 0;">Your recipes and ratings sync to the shared cellar automatically when you're online.</p>
       </div>
 
       <div class="settings-card">
@@ -1750,6 +1745,7 @@
 // CONFIG — paste your Google Apps Script Web App URL here
 // ============================================================
 const BACKEND_URL = 'https://script.google.com/macros/s/AKfycbyqkEHZ0l4QIwNICc_7Amnpy2Y5Od9TQqjrsDfDScdttqZ4D9W-u7AL6wCe4fnFzJFukA/exec';
+const AI_URL = 'https://highball-ai.jacobharmon18.workers.dev';
 
 // ============================================================
 // State & storage
@@ -2310,8 +2306,8 @@ async function sendMessage() {
   state.chatHistory.push({ role: 'user', content: text });
   document.getElementById('suggested').style.display = 'none';
 
-  if (!settings.apiKey) {
-    addMessage('ai', 'I need an API key to actually respond. Open the **Me** tab to add your Anthropic key — for now, here\'s a sample so you can see the flow:', true);
+  if (!AI_URL) {
+    addMessage('ai', 'The AI bartender isn\'t configured yet. Here\'s a sample to show the flow:', true);
     setTimeout(() => addSampleResponse(text), 700);
     return;
   }
@@ -2324,7 +2320,7 @@ async function sendMessage() {
     state.chatHistory.push({ role: 'assistant', content: response });
   } catch (err) {
     hideTyping();
-    addMessage('ai', `Sorry — I couldn't reach the bar. ${err.message}\n\nCheck your API key in the **Me** tab.`);
+    addMessage('ai', `Sorry — I couldn't reach the bar. ${err.message}`);
   }
 }
 function showTyping() {
@@ -2449,17 +2445,11 @@ When you're proposing a specific cocktail recipe, ALWAYS include it as a fenced 
 
 Pick the swatch color that best matches the drink visually. Only include a recipe block when you're giving a complete recipe.`;
 
-  const res = await fetch('https://api.anthropic.com/v1/messages', {
+  // Calls the Cloudflare Worker, which holds the Anthropic key server-side
+  const res = await fetch(AI_URL, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': settings.apiKey,
-      'anthropic-version': '2023-06-01',
-      'anthropic-dangerous-direct-browser-access': 'true',
-    },
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      model: 'claude-haiku-4-5',
-      max_tokens: 1024,
       system: systemPrompt,
       messages: messages,
     }),
@@ -2467,7 +2457,7 @@ Pick the swatch color that best matches the drink visually. Only include a recip
 
   if (!res.ok) {
     const errText = await res.text();
-    throw new Error(`API error (${res.status}). ${errText.slice(0, 100)}`);
+    throw new Error(`AI error (${res.status}). ${errText.slice(0, 120)}`);
   }
   const data = await res.json();
   return (data.content || []).filter(b => b.type === 'text').map(b => b.text).join('\n');
@@ -2589,14 +2579,13 @@ function renderSettings() {
   document.getElementById('user-avatar').textContent =
     (session.displayName || '?').trim().charAt(0).toUpperCase() || '?';
   document.getElementById('setting-name').value = session.displayName || '';
-  document.getElementById('setting-key').value = settings.apiKey || '';
 
   const keyStatus = document.getElementById('key-status');
-  if (settings.apiKey) {
-    keyStatus.textContent = '● Connected';
+  if (AI_URL) {
+    keyStatus.textContent = '● Ready';
     keyStatus.className = 'key-status set';
   } else {
-    keyStatus.textContent = '○ Not connected';
+    keyStatus.textContent = '○ Not configured';
     keyStatus.className = 'key-status unset';
   }
 
@@ -2620,13 +2609,6 @@ async function saveDisplayName() {
       await backendCall('updateProfile', { email: session.email, name: newName });
     } catch (err) { /* keep local */ }
   }
-}
-function saveKey() {
-  const k = document.getElementById('setting-key').value.trim();
-  settings.apiKey = k;
-  persistSettings();
-  renderSettings();
-  toast(k ? 'API key saved' : 'API key cleared');
 }
 
 // ============================================================
