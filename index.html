@@ -30,6 +30,8 @@
     overflow: hidden;
     height: 100%;
     width: 100%;
+    /* Extend background behind home indicator on iOS PWAs */
+    background: var(--ink);
   }
 
   body {
@@ -39,6 +41,11 @@
     -webkit-font-smoothing: antialiased;
     user-select: none;
     -webkit-user-select: none;
+    /* When the dark Ask AI screen is active, the body background flips */
+    transition: background 0.25s ease;
+  }
+  body.ai-active {
+    background: var(--ink);
   }
 
   input, textarea {
@@ -63,6 +70,10 @@
     display: flex;
     flex-direction: column;
     overflow: hidden;
+    /* Use dynamic viewport height so iOS PWAs fill all the way down */
+    height: 100dvh;
+    /* Fallback for browsers that don't support dvh */
+    min-height: -webkit-fill-available;
     max-width: 500px;
     margin: 0 auto;
   }
@@ -1738,7 +1749,7 @@
 // ============================================================
 // CONFIG — paste your Google Apps Script Web App URL here
 // ============================================================
-const BACKEND_URL = 'https://script.google.com/macros/s/AKfycbyqkEHZ0l4QIwNICc_7Amnpy2Y5Od9TQqjrsDfDScdttqZ4D9W-u7AL6wCe4fnFzJFukA/exec';'https://script.google.com/macros/s/AKfy.../exec'
+const BACKEND_URL = ''; // e.g. 'https://script.google.com/macros/s/AKfy.../exec'
 
 // ============================================================
 // State & storage
@@ -1955,6 +1966,10 @@ async function syncFromBackend() {
 function showOnly(id) {
   document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
   document.getElementById(id).classList.add('active');
+  // Dark-themed screens (signin and ai) need the body background to match,
+  // so the area behind the iOS home indicator stays dark too
+  const isDark = id === 'ai' || id === 'signin';
+  document.body.classList.toggle('ai-active', isDark);
 }
 function go(screen, opts = {}) {
   if (!opts.replace) state.navStack.push(screen);
